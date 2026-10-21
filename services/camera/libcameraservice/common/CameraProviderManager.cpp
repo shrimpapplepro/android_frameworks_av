@@ -2214,6 +2214,12 @@ CameraProviderManager::ProviderInfo::DeviceInfo1::DeviceInfo1(const std::string&
         sp<InterfaceT> interface) :
         DeviceInfo(name, tagId, id, hardware::hidl_version{1, minorVersion},
                    publicCameraIds, resourceCost, parentProvider) {
+    // getCameraInfo() needs no open device. Cache it first: if the flash-unit open
+    // below fails (camera daemon still starting), the early returns left mInfo
+    // uninitialised and apps saw a garbage sensor orientation.
+    if (cacheCameraInfo(interface) != OK) {
+        ALOGE("%s: Could not cache CameraInfo", __FUNCTION__);
+    }
     // Get default parameters and initialize flash unit availability
     // Requires powering on the camera device
     hardware::Return<Status> status = interface->open(nullptr);
@@ -2240,12 +2246,6 @@ CameraProviderManager::ProviderInfo::DeviceInfo1::DeviceInfo1(const std::string&
             mDefaultParameters.get(CameraParameters::KEY_SUPPORTED_FLASH_MODES);
     if (flashMode && strstr(flashMode, CameraParameters::FLASH_MODE_TORCH)) {
         mHasFlashUnit = true;
-    }
-
-    status_t res = cacheCameraInfo(interface);
-    if (res != OK) {
-        ALOGE("%s: Could not cache CameraInfo", __FUNCTION__);
-        return;
     }
 
     ret = interface->close();
